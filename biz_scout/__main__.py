@@ -2,10 +2,10 @@
 import logging
 from pathlib import Path
 
-import httpx
 import microcore as mc
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from streamlit.web import bootstrap
+
 from .logging import setup_logging
 from .check_models_startup import check_models_startup
 
