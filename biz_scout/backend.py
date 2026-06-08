@@ -33,11 +33,15 @@ def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
         output += chunk
     conversation_gen = mc.llm_stream([sys_msg, *history], callback=capture_all)
     first_chunk = next(conversation_gen)
-    if first_chunk == ">>>":
+    if first_chunk == ">>":
         yield from conversation_gen
     else:
         for chunk in conversation_gen: pass
-        cmd, args, kwargs = tools.extract_tool_params(output)
-        mcd_gen = tools.call(cmd, *args, **kwargs)
+        output = output.replace('▁▁"', '"')
+        logging.info(f"Answer: {output}")
+        params = mc.utils.parse_json(output)
+        logging.info(f"Received params: {params}")
+        yield "ToolCall: "+str(params)
+        mcd_gen = tools.call(*tools.extract_tool_params(output))
         yield from mcd_gen
     logging.info(f"Answer: {output}")
