@@ -3,7 +3,7 @@
 import microcore as mc
 import streamlit as st
 
-from biz_scout.backend import answer_question
+from biz_scout.backend import process_user_request
 
 st.set_page_config(page_title="BizScout", page_icon="🔎")
 
@@ -33,6 +33,6 @@ if question := st.chat_input("Ask about the company…"):
         # write_stream consumes the generator, renders chunks live, and returns the
         # fully assembled markdown. We pass the whole history so the model has
         # the dialogue context, not just the latest question.
-        answer = st.write_stream(answer_question(st.session_state.messages))
+        answer = st.write_stream(process_user_request(st.session_state.messages))
 
     st.session_state.messages.append(mc.AssistantMsg(answer))
