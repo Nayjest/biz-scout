@@ -7,7 +7,7 @@ from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 from streamlit.web import bootstrap
 
 from .logging import setup_logging
-from .check_models_startup import check_models_startup
+from .wait_for_models import wait_for_models
 
 def main() -> None:
     setup_logging()
@@ -17,9 +17,11 @@ def main() -> None:
         EMBEDDING_DB_FUNCTION=OllamaEmbeddingFunction(
             url="http://ollama:11434/api/embeddings",
             model_name="paraphrase-multilingual",
-        )
+        ),
+        USE_LOGGING=True,
     )
-    check_models_startup()
+    mc.logging.LoggingConfig.OUTPUT_METHOD = logging.info
+    wait_for_models()
     ui = Path(__file__).with_name("ui.py")
     bootstrap.run(str(ui), is_hello=False, args=[], flag_options={})
 

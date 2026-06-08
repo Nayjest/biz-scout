@@ -1,9 +1,12 @@
 import logging
+import time
 import microcore as mc
 import httpx
 
 
-def check_models_startup():
+def wait_for_models():
+    started = time.monotonic()
+
     logging.info("Waiting for embedding model warmup....")
     while True:
         try:
@@ -11,6 +14,7 @@ def check_models_startup():
             break
         except httpx.TimeoutException:
             logging.warning("Ollama embedding API not available yet, retrying...")
+    embedding_wait = time.monotonic() - started
     logging.info(mc.ui.green("[OK] ") + "Embedding model is available.")
 
     logging.info("Waiting for LLM warmup....")
@@ -23,4 +27,13 @@ def check_models_startup():
         except mc.BadAIAnswer as e:
             logging.warning("LLM not available yet, retrying... (%s)", e)
             continue
+    llm_wait = time.monotonic() - started - embedding_wait
     logging.info(mc.ui.green("[OK] ") + "LLM is available.")
+
+    total_wait = time.monotonic() - started
+    logging.info(
+        "Model warmup wait times — embedding: %.1fs, LLM: %.1fs, total: %.1fs",
+        embedding_wait,
+        llm_wait,
+        total_wait,
+    )

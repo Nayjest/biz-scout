@@ -1,13 +1,17 @@
 services:
   ollama:
     image: ollama/ollama:latest
+    environment:
+      # Quiet the per-request [GIN] HTTP access logs (and the startup warning);
+      # model load/error logs are unaffected.
+      - GIN_MODE=release
     volumes:
       - ./storage/ollama-models:/root/.ollama  # persist pulled models across restarts
     ports:
       - "11434:11434"  # optional: expose for host-side `ollama`/curl debugging
     healthcheck:
       test: ["CMD", "ollama", "list"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 30
       start_period: 20s
@@ -28,13 +32,12 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=http://ollama:11434
-    # Pull the chat LLM and the embedding model. paraphrase-multilingual is the
-    # Ollama build of sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2.
     entrypoint:
       - /bin/sh
       - -c
+      # Default chat LLM: smallest Qwen3.5 (0.8b, ~1GB). Was gemma3n:e4b.
       - >
-        ollama pull ${OLLAMA_MODEL:-gemma3n:e4b} &&
+        ollama pull ${OLLAMA_MODEL:-qwen3.5:0.8b} &&
         ollama pull ${EMBEDDING_MODEL:-paraphrase-multilingual}
     restart: "no"
 
