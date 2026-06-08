@@ -1,7 +1,4 @@
-"""Streamlit chat UI for BizScout.
-
-Run locally:   uv run streamlit run app.py
-"""
+"""Streamlit chat UI for BizScout. Launched via ``python -m biz_scout``."""
 
 import streamlit as st
 

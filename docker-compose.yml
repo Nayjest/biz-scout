@@ -1,0 +1,64 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ./storage/ollama-models:/root/.ollama  # persist pulled models across restarts
+    ports:
+      - "11434:11434"  # optional: expose for host-side `ollama`/curl debugging
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+    # NVIDIA GPU passthrough (requires the NVIDIA Container Toolkit on the host).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  model-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    # Pull the chat LLM and the embedding model. paraphrase-multilingual is the
+    # Ollama build of sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        ollama pull ${OLLAMA_MODEL:-gemma3n:e4b} &&
+        ollama pull ${EMBEDDING_MODEL:-paraphrase-multilingual}
+    restart: "no"
+
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      # microcore reads provider config from the environment. Pinned to the local
+      # Ollama service over its OpenAI-compatible endpoint so the container always
+      # runs offline regardless of any local `.env`. LLM_API_KEY is
+      # ignored by Ollama but must be non-empty for the OpenAI client. Override the
+      # model via OLLAMA_MODEL (must match the model-pull service).
+      - LLM_API_TYPE=openai
+      - LLM_API_BASE=http://ollama:11434/v1
+      - LLM_API_KEY=ollama
+      - MODEL=${OLLAMA_MODEL:-gemma3n:e4b}
+      # Embedding model served by the same Ollama instance (OpenAI-compatible
+      # endpoint at LLM_API_BASE + /embeddings). Consumed by the KB/retrieval code.
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-paraphrase-multilingual}
+    depends_on:
+      model-pull:
+        condition: service_completed_successfully
+    # Mount source for live edits during development; Streamlit auto-reloads.
+    volumes:
+      - ./biz_scout:/app/biz_scout
+    restart: unless-stopped
