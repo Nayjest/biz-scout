@@ -94,6 +94,9 @@ services:
     volumes:
       - ./biz_scout:/app/biz_scout
       - ./tpl:/app/tpl  # live-edit Jinja2 prompt templates without a rebuild
+      # Persist the knowledge base (raw_kb facts + Chroma vector DB) to the host.
+      # Without this, mc.storage writes to the container's ephemeral /app/storage.
+      - ./storage:/app/storage
       # Perplexity API key/config — read at runtime by mc.configure('.env.perplexity').
       # Git-ignored and excluded from the image, so it must be mounted in.
       - ./.env.perplexity:/app/.env.perplexity:ro

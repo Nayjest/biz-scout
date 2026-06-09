@@ -42,17 +42,13 @@ SUBJECTS = {
 
 def collect_company_info_perplexity(company_name: str) -> list[tuple[str, str]]:
     logging.info("Collecting information for company: %s", company_name)
-    facts: list[tuple[str, str]] = []
     started_at = time.monotonic()
     results = asyncio.run(mc.utils.run_parallel(
-        [
-            collect_facts_group_perplexity(company_name, subj_key)
-            for subj_key in SUBJECTS.keys()
-        ],
+        [collect_facts_group_perplexity(company_name, subj_key) for subj_key in SUBJECTS.keys()],
         max_concurrent_tasks=MAX_PARALLEL_WORKERS,
     ))
-    for group in results:
-        facts.extend(group)
+    # collect instead facts in one line
+    facts: list[tuple[str, str]] = [fact for group in results for fact in group]
     logging.info(
         "Collected %d facts for company %s in %.1fs",
         len(facts),
@@ -73,7 +69,7 @@ async def collect_facts_group_perplexity(
     ).as_user
     facts = []
     history = [prompt]
-    for i in range(3):
+    for i in range(PAGES_PER_SUBJECT):
         logging.info(
             "Collecting facts for subject: %s... Iteration %d\n%s",
             subject,
@@ -81,10 +77,17 @@ async def collect_facts_group_perplexity(
             mc.ui.green(prompt)
         )
         response = await perplexity(history)
-        mc.storage.write(
+        logging.info(
+            "Received response for subject %s, iteration %d: %s",
+            subject,
+            i + 1,
+            mc.ui.cyan(response)
+        )
+        file = mc.storage.write(
             f"raw_kb/{safe_file_name(company_name)}/{subj_key}_step{i+1}.txt",
             str(response)
         )
+        logging.info("Saved raw response to %s", file)
         history.append(response.as_assistant)
         history.append(mc.UserMsg("Collect more facts from other sources"))
         if "FATAL_ERROR" in response:
@@ -101,5 +104,5 @@ async def collect_facts_group_perplexity(
                 url = url.replace("Source URL:", "").strip()
                 facts.append((fact, url))
             except Exception as e:
-                logging.error(f"Failed to parse record: {record}")
+                logging.error(f"Failed to parse record: {record}: {e}")
     return facts

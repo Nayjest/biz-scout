@@ -8,7 +8,13 @@ from microcore.ai_func import ai_func, ToolSet
 from .company import normalise_company_name, collection_id
 from .data_collector import collect_company_info_perplexity
 
+CONTEXT_DOCS_LIMIT = 20
 
+def is_indexed(company_name_norm: str) -> bool:
+    return bool(mc.texts.find_one("companies", where={"company_name": company_name_norm}))
+
+def mark_indexed(company_name_norm: str):
+    mc.texts.save("companies", company_name_norm, {"company_name": company_name_norm})
 
 
 @ai_func()
@@ -26,9 +32,9 @@ def index(
     yield f"\nIndexing facts...  \n"
     cid = collection_id(company_name)
     mc.texts.clear(cid)
-    mc.texts.save("companies", company_name)
     facts_and_metadata = [(fact, {"src": src}) for fact, src in facts]
     mc.texts.save_many(cid, facts_and_metadata)
+    mark_indexed(company_name)
     yield "\nDone"
 
 @ai_func()
@@ -41,7 +47,7 @@ def answer_question(
     """
     company_name = normalise_company_name(company_name)
     logging.info(f"Answering question about: {company_name}... Question: {question}")
-    if not mc.texts.find_one("companies", where={"company_name": company_name.lower().strip()}):
+    if not is_indexed(company_name):
         yield textwrap.dedent(
             f"""
             Company \"{company_name}\" not found in the database.
@@ -50,13 +56,23 @@ def answer_question(
             """
         )
         return
-    yield "\nHere is your answer:"
+    docs = mc.texts.search(collection_id(company_name), question, n_results=CONTEXT_DOCS_LIMIT)
+    if "Y" not in mc.tpl("check_answer_existence.jinja2", question=question, docs=docs).to_llm():
+        yield textwrap.dedent("""
+        I'm sorry, but I couldn't find the information needed to answer your question in the database.
+        """)
+    else:
+        yield from mc.llm_stream(mc.tpl("answer_question.jinja2", question=question, docs=docs))
+
 
 def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
     tools = ToolSet([index, answer_question])
+    user_question = history[-1].content
+    available_companies = mc.texts.search("companies", user_question, n_results=100)
     sys_msg = mc.tpl(
         "front_ai_system_prompt.jinja2",
-        tools = tools
+        tools = tools,
+        available_companies = available_companies,
     ).as_system
     logging.info(f"Received question: {history[-1].content}")
 
