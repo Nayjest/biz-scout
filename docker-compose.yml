@@ -1,3 +1,8 @@
+# Model selection — single source of truth. Edit these to switch models.
+# Default chat LLM: gemma4:12b (~7.6GB). Was gemma3n:e4b / qwen3.5:0.8b.
+x-llm-model: &llm-model "gemma4:12b"
+x-embedding-model: &embedding-model "paraphrase-multilingual"
+
 services:
   ollama:
     image: ollama/ollama:latest
@@ -35,14 +40,42 @@ services:
       ollama:
         condition: service_healthy
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: *llm-model
+      EMBEDDING_MODEL: *embedding-model
     entrypoint:
       - /bin/sh
       - -c
-      # Default chat LLM: gemma4:12b (~7.6GB). Was gemma3n:e4b / qwen3.5:0.8b.
+      # $$VAR is escaped so Compose passes a literal $VAR to the container shell.
       - >
-        ollama pull ${OLLAMA_MODEL:-gemma4:12b} &&
-        ollama pull ${EMBEDDING_MODEL:-paraphrase-multilingual}
+        ollama pull "$$OLLAMA_MODEL" &&
+        ollama pull "$$EMBEDDING_MODEL"
+    restart: "no"
+
+  # Load both models into the Ollama server's memory before the app starts.
+  # /api/generate with no prompt just loads the LLM; /api/embeddings warms the
+  # embedding model. keep_alive:-1 makes them stay resident (also enforced
+  # globally via OLLAMA_KEEP_ALIVE on the ollama service).
+  model-warmup:
+    image: curlimages/curl:latest
+    depends_on:
+      model-pull:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_MODEL: *llm-model
+      EMBEDDING_MODEL: *embedding-model
+    entrypoint:
+      - /bin/sh
+      - -c
+      # $$VAR is escaped so Compose passes a literal $VAR to the container shell.
+      - >
+        echo "Warming LLM $$OLLAMA_MODEL..." &&
+        curl -fsS http://ollama:11434/api/generate
+        -d "{\"model\":\"$$OLLAMA_MODEL\",\"keep_alive\":-1}" &&
+        echo "Warming embeddings $$EMBEDDING_MODEL..." &&
+        curl -fsS http://ollama:11434/api/embeddings
+        -d "{\"model\":\"$$EMBEDDING_MODEL\",\"prompt\":\"warmup\",\"keep_alive\":-1}" &&
+        echo "Both models resident."
     restart: "no"
 
   app:
@@ -50,16 +83,18 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - LLM_API_TYPE=openai
-      - LLM_API_BASE=http://ollama:11434/v1
-      - LLM_API_KEY=ollama
-      # Default chat LLM: gemma4:12b (~7.6GB). Was gemma3n:e4b / qwen3.5:0.8b.
-      - MODEL=${OLLAMA_MODEL:-gemma4:12b}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-paraphrase-multilingual}
+      LLM_API_TYPE: openai
+      LLM_API_BASE: http://ollama:11434/v1
+      LLM_API_KEY: ollama
+      MODEL: *llm-model
+      EMBEDDING_MODEL: *embedding-model
     depends_on:
-      model-pull:
+      model-warmup:
         condition: service_completed_successfully
     volumes:
       - ./biz_scout:/app/biz_scout
       - ./tpl:/app/tpl  # live-edit Jinja2 prompt templates without a rebuild
+      # Perplexity API key/config — read at runtime by mc.configure('.env.perplexity').
+      # Git-ignored and excluded from the image, so it must be mounted in.
+      - ./.env.perplexity:/app/.env.perplexity:ro
     restart: unless-stopped

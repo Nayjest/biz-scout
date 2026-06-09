@@ -10,6 +10,7 @@ dependencies = [
     "anthropic",
     "chromadb",
     "ollama",
+    "anyascii",
 ]
 
 [dependency-groups]

@@ -8,10 +8,12 @@ from streamlit.web import bootstrap
 
 from .logging import setup_logging
 from .wait_for_models import wait_for_models
+from .perplexity_connection import init_perplexity
 
 def main() -> None:
     setup_logging()
     logging.info("Starting BizScout...")
+    init_perplexity()
     mc.configure(
         DOT_ENV_FILE=".env",
         EMBEDDING_DB_FUNCTION=OllamaEmbeddingFunction(
