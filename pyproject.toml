@@ -6,7 +6,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "streamlit>=1.40",
-    "ai-microcore>=4.0",
+    "ai-microcore>=6.3",
+    "anthropic",
+    "chromadb",
+    "ollama",
+    "anyascii",
 ]
 
 [dependency-groups]

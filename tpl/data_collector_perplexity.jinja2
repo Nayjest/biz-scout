@@ -1,0 +1,25 @@
+#TASK
+
+Conduct deep research and collect {{ subject }} about the following company: {{ company_name }}.
+Use rich variety of sources to collect diverse information about the company.
+
+Present results as list of records, where each record is plain text focused on a specific aspect, up to 1 page.
+
+#REQUIREMENTS
+- (!IMPORTANT): Records must be separated by three dashes on a new line (---).
+- Avoid including marketing bullshit -- focus on facts and data.
+- Each record must be in plain text, that may include bp lists, but no other formatting (no bold, italics, etc).
+- (!IMPORTANT): Last line of each record be in the following format:
+  "Source URL: <URL_HERE>"
+  If there are multiple sources for a record, choose the most reliable one.
+- If you can't accomplish this task, answer with <FATAL_ERROR> tag.
+
+#EXAMPLE
+
+XYZ LLC has 500 employees among 10 offices.
+Office locations: Kyiv, Lviv, Odesa
+Source URL: http://example1.com/this-is-source
+---
+XYZ LLC was founded in 2010 by John Doe and Jane Smith.
+Source URL: http://example2.com/this-is-source
+---

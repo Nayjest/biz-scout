@@ -1,0 +1,12 @@
+.git
+.idea
+.venv
+__pycache__
+*.pyc
+.env*
+storage
+.python-version
+.ruff_cache
+Dockerfile
+docker-compose.yml
+.dockerignore

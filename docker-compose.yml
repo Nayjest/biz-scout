@@ -1,0 +1,96 @@
+services:
+
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    # Inject the full .env (PERPLEXITY_API_KEY, RAG/indexing settings, etc.) into the
+    # container. The explicit `environment:` values below override any overlapping keys.
+    env_file:
+      - .env
+    environment:
+      # These pin the app -> Ollama connection regardless of .env, and must override
+      # the .env LLM_API_* values (which target Perplexity / are container-unaware).
+      LLM_API_TYPE: openai
+      LLM_API_BASE: http://ollama:11434/v1
+      LLM_API_KEY: ollama
+      MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      MAX_CONVERSATION_MESSAGES: ${MAX_CONVERSATION_MESSAGES}
+      PAGES_PER_SUBJECT: ${PAGES_PER_SUBJECT}
+      MAX_CONCURRENT_TASKS: ${MAX_CONCURRENT_TASKS}
+      MAX_DATA_COLLECTING_QUESTIONS: ${MAX_DATA_COLLECTING_QUESTIONS}
+    depends_on:
+      model-warmup:
+        condition: service_completed_successfully
+    volumes:
+      - ./biz_scout:/app/biz_scout
+      - ./tpl:/app/tpl
+      - ./storage:/app/storage
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      - GIN_MODE=release
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-16384}
+    volumes:
+      - ./storage/ollama-models:/root/.ollama  # persist pulled models across restarts
+    ports:
+      - "11434:11434"  # optional: expose for host-side `ollama`/curl debugging
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 20s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+    # NVIDIA GPU passthrough (requires the NVIDIA Container Toolkit on the host).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  model-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+    entrypoint:
+      - /bin/sh
+      - -c
+      # $$VAR is escaped so Compose passes a literal $VAR to the container shell.
+      - >
+        ollama pull "$$OLLAMA_MODEL" &&
+        ollama pull "$$EMBEDDING_MODEL"
+    restart: "no"
+
+  model-warmup:
+    image: curlimages/curl:latest
+    depends_on:
+      model-pull:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        echo "Warming LLM $$OLLAMA_MODEL..." &&
+        curl -fsS http://ollama:11434/api/generate
+        -d "{\"model\":\"$$OLLAMA_MODEL\",\"keep_alive\":-1}" &&
+        echo "Warming embeddings $$EMBEDDING_MODEL..." &&
+        curl -fsS http://ollama:11434/api/embeddings
+        -d "{\"model\":\"$$EMBEDDING_MODEL\",\"prompt\":\"warmup\",\"keep_alive\":-1}" &&
+        echo "Both models resident."
+    restart: "no"

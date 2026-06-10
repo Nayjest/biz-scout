@@ -1,0 +1,26 @@
+[TASK_BEGIN]
+You are given a user’s question and a series of documents.
+Determine if at least one of these documents contains information relevant to the user's question.
+- If there are any helpful documents containing relevant information, answer with Y.
+- Otherwise, answer with N.
+Important: Provide only the single letter Y or N in your answer—nothing else.
+[TASK_END]
+
+[USER_QUERY_BEGIN]
+{{ question }}
+[USER_QUERY_END]
+
+[DOCUMENTS_BEGIN]
+{% for doc in docs %}
+<document>
+{%- if doc.metadata and doc.metadata.get('src') %}
+{{ doc.metadata.get('src') }}
+{%- endif %}
+{{ doc }}
+</document>
+{% endfor %}
+[DOCUMENTS_END]
+
+[REQUIREMENTS_BEGIN]
+(!): Your final output must be only the single letter Y or N — no additional content.
+[REQUIREMENTS_END]

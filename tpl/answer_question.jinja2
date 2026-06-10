@@ -1,0 +1,27 @@
+[TASK_BEGIN]
+Provide a helpful answer to the user using the provided documents if they are relevant.
+[TASK_END]
+
+[USER_QUERY_BEGIN]
+{{ question }}
+[USER_QUERY_END]
+
+[DOCUMENTS_BEGIN]
+{% for doc in docs %}
+<document>
+{%- if doc.metadata and doc.metadata.get('src') %}
+{{ doc.metadata.get('src') }}
+{%- endif %}
+{{ doc | string | truncate(max_doc_chars, true, '…') }}
+</document>
+{% endfor %}
+[DOCUMENTS_END]
+
+[GUIDELINES_BEGIN]
+- If documents or articles chosen by you to fulfill the user's request contain self-referring external links,
+you may add those links to the end of your response.
+- Avoid using local/relative anchor links in the response.
+- You can use markdown formatting in your answer.
+- Do not include any content in your answer that is not directly relevant to the user's question. Be laconic.
+- Finish answer with compact list of sources used in your answer in following format: [[1]](http://url1), [[2]](http://url1),.
+[GUIDELINES_END]
