@@ -15,6 +15,7 @@ def init_perplexity():
         if not _llm_func:
             logging.info("Initializing perplexity...")
             mc.configure(
+                USE_DOT_ENV=False,
                 LLM_API_TYPE=mc.ApiType.OPENAI,
                 LLM_API_PLATFORM=mc.ApiPlatform.PERPLEXITY,
                 LLM_API_BASE=os.getenv("PERPLEXITY_API_BASE"),

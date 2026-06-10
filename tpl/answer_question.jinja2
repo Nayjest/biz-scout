@@ -12,7 +12,7 @@ Provide a helpful answer to the user using the provided documents if they are re
 {%- if doc.metadata and doc.metadata.get('url') %}
 {{ doc.metadata.get('url') }}
 {%- endif %}
-{{ doc }}
+{{ doc | string | truncate(max_doc_chars, true, '…') }}
 </document>
 {% endfor %}
 [DOCUMENTS_END]

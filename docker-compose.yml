@@ -32,6 +32,7 @@ services:
       - GIN_MODE=release
       - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-16384}
     volumes:
       - ./storage/ollama-models:/root/.ollama  # persist pulled models across restarts
     ports:

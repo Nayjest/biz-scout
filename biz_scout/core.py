@@ -10,7 +10,9 @@ from microcore.configuration import get_bool_from_env
 from .company import normalise_company_name, collection_id
 from .data_collector import collect_company_info_perplexity
 
-DOCUMENTS_IN_CONTEXT = int(os.getenv("DOCUMENTS_IN_CONTEXT"))
+DOCUMENTS_IN_CONTEXT = int(os.getenv("DOCUMENTS_IN_CONTEXT", 20))
+MAX_COMPANIES_IN_PROMPT = int(os.getenv("MAX_COMPANIES_IN_PROMPT", 30))
+MAX_DOC_CHARS = int(os.getenv("MAX_DOC_CHARS", 2000))
 TOKEN__STREAM_IT_TO_USER = ">>"
 
 def is_indexed(company_name_norm: str) -> bool:
@@ -84,19 +86,27 @@ def answer_question(
             """)
     else:
         yield from mc.llm_stream(
-            mc.tpl("answer_question.jinja2", question=question, docs=docs)
+            mc.tpl(
+                "answer_question.jinja2",
+                question=question,
+                docs=docs,
+                max_doc_chars=MAX_DOC_CHARS,
+            )
         )
 
 
 def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
     tools = ToolSet([index, answer_question])
     user_question = history[-1].content
-    available_companies = mc.texts.search("companies", user_question, n_results=100)
+    available_companies = mc.texts.search(
+        "companies", user_question, n_results=MAX_COMPANIES_IN_PROMPT
+    )
     sys_msg = mc.tpl(
         "front_ai_system_prompt.jinja2",
         tools=tools,
         available_companies=available_companies,
         TOKEN__STREAM_IT_TO_USER=TOKEN__STREAM_IT_TO_USER,
+        user_question=user_question,
     ).as_system
     logging.info(f"Received question: {history[-1].content}")
 

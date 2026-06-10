@@ -8,8 +8,8 @@ import microcore as mc
 from biz_scout.bootstrap.perplexity_connection import perplexity
 from .company import safe_file_name
 
-PAGES_PER_SUBJECT = os.getenv("PAGES_PER_SUBJECT", 2)
-MAX_CONCURRENT_TASKS = os.getenv("MAX_CONCURRENT_TASKS", 5)
+PAGES_PER_SUBJECT = int(os.getenv("PAGES_PER_SUBJECT", 2))
+MAX_CONCURRENT_TASKS = int(os.getenv("MAX_CONCURRENT_TASKS", 5))
 
 SUBJECTS = {
     "news": "Latest news and developments (recent news, press releases, product launches, executive changes)",
