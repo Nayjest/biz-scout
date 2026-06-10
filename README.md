@@ -29,21 +29,10 @@ Data collection requires a Perplexity API key. Copy the example file and fill in
 key:
 
 ```powershell
-Copy-Item .env.perplexity.example .env.perplexity
+copy .env.example .env.perplexity
 ```
 
-Then edit `.env.perplexity` and set `LLM_API_KEY`:
-
-```ini
-LLM_API_KEY=pplx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-LLM_API_PLATFORM=perplexity
-LLM_API_BASE=https://api.perplexity.ai
-MODEL=sonar-pro
-USE_LOGGING=print_stream
-```
-
-> `.env.perplexity` holds a secret — it is git-ignored. Without it, data collection
-> fails and no facts can be indexed.
+Then edit `.env.perplexity` and set perplexity API KEY.
 
 ### Run (Docker)
 

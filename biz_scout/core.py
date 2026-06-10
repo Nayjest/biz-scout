@@ -101,6 +101,20 @@ def answer_question(
 
 
 def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
+    """Stream user-facing text and append the assistant turn to *history*:
+    .content = raw LLM generation (what the model sees next turn),
+    .display = text shown to the user (not a dataclass field, never sent to LLM).
+    """
+    msg = mc.AssistantMsg()
+    msg.display = ""
+    for chunk in _process_user_request(history, msg):
+        msg.display += chunk
+        yield chunk
+    msg.content = msg.content.strip() or TOKEN__STREAM_IT_TO_USER + msg.display.strip()
+    history.append(msg)
+
+
+def _process_user_request(history: list[mc.Msg], msg: mc.AssistantMsg) -> Iterator[str]:
     tools = ToolSet([index, answer_question])
     user_question = history[-1].content
     available_companies = mc.texts.search(
@@ -115,43 +129,37 @@ def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
     ).as_system
     logging.info(f"Received question: {history[-1].content}")
 
-    output = ""
-
     def capture_all(chunk):
-        nonlocal output
-        output += chunk
+        msg.content += chunk
 
-    conversation_generator = mc.llm_stream([sys_msg, *history], callback=capture_all)
+    msgs = []
+    for m in history:
+        if msgs and msgs[-1].role == m.role:
+            msgs[-1] = m
+        elif msgs or m.role == mc.Role.USER:
+            msgs.append(m)
+
+    conversation_generator = mc.llm_stream([sys_msg, *msgs], callback=capture_all)
+
     try:
-        try:
-            first_chunk = next(conversation_generator)
-        except StopIteration:
-            # An empty (zero-token) completion would otherwise surface as
-            # "RuntimeError: generator raised StopIteration" (PEP 479).
-            logging.warning(f"Empty LLM completion for question: {user_question}")
-            yield "I didn't get a response — please try again."
-            return
+        first_chunk = next(conversation_generator)
+    except StopIteration:
+        yield "I didn't get a response — please try again."
+        return
 
-        if first_chunk and first_chunk.startswith(TOKEN__STREAM_IT_TO_USER):
-            # Re-emit the peeked first chunk (minus the marker) so we don't drop it.
-            yield first_chunk[len(TOKEN__STREAM_IT_TO_USER):]
-            yield from conversation_generator
-            logging.info(f"Answer: {output}")
-            return
+    if first_chunk and first_chunk.startswith(TOKEN__STREAM_IT_TO_USER):
+        # Re-emit the peeked first chunk (minus the marker) so we don't drop it.
+        yield first_chunk[len(TOKEN__STREAM_IT_TO_USER):]
+        yield from conversation_generator
+        logging.info(f"Answer: {msg.content}")
+        return
 
-        for _ in conversation_generator:
-            pass
-    finally:
-        # Guarantee the underlying llm_stream thread/slot is released even if a
-        # consumer stops early — a half-drained generator leaks the ollama slot
-        # and makes the next request come back empty.
-        close = getattr(conversation_generator, "close", None)
-        if close is not None:
-            close()
+    for _ in conversation_generator:
+        pass
 
-    logging.info(f"LLM Response: {output}")
+    logging.info(f"LLM Response: {msg.content}")
     try:
-        name, args, kwargs = tools.extract_tool_params(output)
+        name, args, kwargs = tools.extract_tool_params(msg.content)
         yield f" -> **{name}**({', '.join(k+':'+v for k,v in kwargs.items())})  \n  \n"
     except Exception:
         yield "Error: Model generated an invalid tool call. \n \n"

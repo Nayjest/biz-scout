@@ -22,11 +22,9 @@ if "messages" not in st.session_state:
     # deque(maxlen=N) auto-drops the oldest message once the cap is reached.
     st.session_state.messages = deque(maxlen=MAX_CONVERSATION_MESSAGES)
 
-# Replay the transcript so far. mc.Role is a str subclass equal to
-# "user"/"assistant", so it works directly with st.chat_message.
 for message in st.session_state.messages:
     with st.chat_message(message.role):
-        st.markdown(message.content)
+        st.markdown(getattr(message, "display", message.content))
 
 if question := st.chat_input("Ask about the company…"):
     st.session_state.messages.append(mc.UserMsg(question))
@@ -34,6 +32,4 @@ if question := st.chat_input("Ask about the company…"):
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        answer = st.write_stream(process_user_request(st.session_state.messages))
-
-    st.session_state.messages.append(mc.AssistantMsg(answer))
+        st.write_stream(process_user_request(st.session_state.messages))
