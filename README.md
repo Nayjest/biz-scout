@@ -29,10 +29,10 @@ Data collection requires a Perplexity API key. Copy the example file and fill in
 key:
 
 ```powershell
-copy .env.example .env.perplexity
+copy .env.example .env
 ```
 
-Then edit `.env.perplexity` and set perplexity API KEY.
+Then edit `.env` and set perplexity API KEY.
 
 ### Run (Docker)
 
@@ -54,15 +54,6 @@ EMBEDDING_MODEL=paraphrase-multilingual
 ```
 
 Pulled models persist in `./storage/ollama-models` across restarts.
-
-### Index a company from the CLI
-
-To build the knowledge base for a company without the UI, run `index_company.py`. It
-takes the company name as the first argument (defaults to `OBRIO` if omitted):
-
-```powershell
-uv run python index_company.py "Microsoft"
-```
 
 This collects facts via Perplexity and writes them to the local ChromaDB store, so it
 also needs a valid `.env.perplexity`.
