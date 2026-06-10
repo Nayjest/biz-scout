@@ -107,14 +107,33 @@ def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
         output += chunk
 
     conversation_generator = mc.llm_stream([sys_msg, *history], callback=capture_all)
-    first_chunk = next(conversation_generator)
-    if first_chunk and first_chunk.startswith(TOKEN__STREAM_IT_TO_USER):
-        yield from conversation_generator
-        logging.info(f"Answer: {output}")
-        return
+    try:
+        try:
+            first_chunk = next(conversation_generator)
+        except StopIteration:
+            # An empty (zero-token) completion would otherwise surface as
+            # "RuntimeError: generator raised StopIteration" (PEP 479).
+            logging.warning(f"Empty LLM completion for question: {user_question}")
+            yield "I didn't get a response — please try again."
+            return
 
-    for _ in conversation_generator:
-        pass
+        if first_chunk and first_chunk.startswith(TOKEN__STREAM_IT_TO_USER):
+            # Re-emit the peeked first chunk (minus the marker) so we don't drop it.
+            yield first_chunk[len(TOKEN__STREAM_IT_TO_USER):]
+            yield from conversation_generator
+            logging.info(f"Answer: {output}")
+            return
+
+        for _ in conversation_generator:
+            pass
+    finally:
+        # Guarantee the underlying llm_stream thread/slot is released even if a
+        # consumer stops early — a half-drained generator leaks the ollama slot
+        # and makes the next request come back empty.
+        close = getattr(conversation_generator, "close", None)
+        if close is not None:
+            close()
+
     logging.info(f"LLM Response: {output}")
     name, args, kwargs = tools.extract_tool_params(output)
     yield f" -> **{name}**({', '.join(k+':'+v for k,v in kwargs.items())})  \n"
