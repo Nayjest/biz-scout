@@ -150,7 +150,14 @@ def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
             close()
 
     logging.info(f"LLM Response: {output}")
-    name, args, kwargs = tools.extract_tool_params(output)
-    yield f" -> **{name}**({', '.join(k+':'+v for k,v in kwargs.items())})  \n"
-    tool_call_generator = tools.call(name, args, kwargs)
-    yield from tool_call_generator
+    try:
+        name, args, kwargs = tools.extract_tool_params(output)
+        yield f" -> **{name}**({', '.join(k+':'+v for k,v in kwargs.items())})  \n  \n"
+    except Exception:
+        yield "Error: Model generated an invalid tool call. \n \n"
+        return
+    try:
+        tool_call_generator = tools.call(name, args, kwargs)
+        yield from tool_call_generator
+    except Exception as e:
+        yield f"Error calling tool {name}: {e}"

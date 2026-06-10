@@ -27,7 +27,7 @@ def init_perplexity():
                     url=os.getenv("EMBEDDING_API_URL", "http://ollama:11434/api/embeddings"),
                     model_name=os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual"),
                 ),
-                USE_LOGGING=False,
+                USE_LOGGING=True,
             )
             _llm_func = mc.env().llm_async_function
             logging.info(f"[ {ui.green('Done')} ]")
