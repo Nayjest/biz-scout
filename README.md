@@ -9,7 +9,7 @@ public sources, then answers questions about it offline.
    [Perplexity](https://www.perplexity.ai/) API (`sonar-pro`).
 2. **Index** — the collected facts are embedded with a local Ollama model
    (`paraphrase-multilingual`) and stored in a local **ChromaDB** vector store.
-3. **Answer** — a local chat LLM (Ollama `gemma4:12b`) answers questions against the
+3. **Answer** — a local chat LLM (Ollama `qwen3.5:9b`) answers questions against the
    stored knowledge base, using tool calls to index new companies on demand.
 
 The chat/embedding models run fully locally (via Ollama in Docker). Only the initial
@@ -52,16 +52,16 @@ docker-compose up --build
 ```
 
 This starts Ollama, pulls and warms the chat + embedding models (first run downloads
-~8 GB, so give it a few minutes), then launches the Streamlit UI.
+~7 GB, so give it a few minutes), then launches the Streamlit UI.
 
 Open **http://localhost:8501** and ask about a company. If it isn't indexed yet, the
 assistant offers to collect and build its knowledge base on the fly.
 
-Model selection lives at the top of `docker-compose.yml`:
+Model selection lives in `.env` (`docker-compose.yml` reads it from there):
 
-```yaml
-x-llm-model: &llm-model "gemma4:12b"
-x-embedding-model: &embedding-model "paraphrase-multilingual"
+```ini
+OLLAMA_MODEL=qwen3.5:9b
+EMBEDDING_MODEL=paraphrase-multilingual
 ```
 
 Pulled models persist in `./storage/ollama-models` across restarts.

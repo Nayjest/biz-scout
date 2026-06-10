@@ -4,6 +4,7 @@ import logging
 
 import microcore as mc
 from microcore import ui
+from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 
 _llm_func: Callable | None = None
 
@@ -21,7 +22,11 @@ def init_perplexity():
                 LLM_API_BASE=os.getenv("PERPLEXITY_API_BASE"),
                 LLM_API_KEY=os.getenv("PERPLEXITY_API_KEY"),
                 MODEL=os.getenv("PERPLEXITY_MODEL"),
-                EMBEDDING_DB_TYPE=mc.EmbeddingDbType.NONE,
+                EMBEDDING_DB_TYPE=mc.EmbeddingDbType.CHROMA,
+                EMBEDDING_DB_FUNCTION=OllamaEmbeddingFunction(
+                    url=os.getenv("EMBEDDING_API_URL", "http://ollama:11434/api/embeddings"),
+                    model_name=os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual"),
+                ),
                 USE_LOGGING=False,
             )
             _llm_func = mc.env().llm_async_function

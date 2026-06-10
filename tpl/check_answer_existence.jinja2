@@ -13,8 +13,8 @@ Important: Provide only the single letter Y or N in your answer—nothing else.
 [DOCUMENTS_BEGIN]
 {% for doc in docs %}
 <document>
-{%- if doc.metadata and doc.metadata.get('url') %}
-{{ doc.metadata.get('url') }}
+{%- if doc.metadata and doc.metadata.get('src') %}
+{{ doc.metadata.get('src') }}
 {%- endif %}
 {{ doc }}
 </document>

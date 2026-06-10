@@ -33,17 +33,22 @@ def mark_indexed(company_name_norm: str):
 def index(
     company_name: str,  # Normalised company name using latin characters only, without legal suffixes like "Inc", "Ltd", etc. For example, "microsoft"
 ) -> Iterator[str]:
-    """Index the target company by fetching relevant information and storing it in the database."""
+    """
+    Index the target company by fetching relevant information and storing it in the database.
+    (only for companies that are not listed,
+    use it when user clearly indicates that he wants to index target company)
+    """
 
     company_name = normalise_company_name(company_name)
-    yield f"\nCollecting information on company: {company_name}...  \n"
+    cid = collection_id(company_name)
 
+    yield f"\nCollecting information on company: {company_name}...  \n"
+    mc.texts.clear(cid)
     facts: list[tuple[str, str]] = collect_company_info_perplexity(company_name)
     yield f"\nCollected {len(facts)} facts.  \n"
 
     yield f"\nIndexing facts...  \n"
-    cid = collection_id(company_name)
-    mc.texts.clear(cid)
+
     facts_and_metadata = [(fact, {"src": src}) for fact, src in facts]
     mc.texts.save_many(cid, facts_and_metadata)
     mark_indexed(company_name)

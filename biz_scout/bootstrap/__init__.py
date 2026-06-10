@@ -19,7 +19,8 @@ def bootstrap(dot_env_file: str = ".env", warmup: bool = True):
         LLM_API_TYPE=os.getenv("LLM_API_TYPE", "openai"),
         LLM_API_BASE=os.getenv("LLM_API_BASE", "ollama:11434/api"),
         LLM_API_KEY=os.getenv("LLM_API_KEY", "ollama"),
-        MODEL=os.getenv("MODEL", "gemma4:12b"),
+        MODEL=os.getenv("MODEL"),
+        EMBEDDING_DB_TYPE=mc.EmbeddingDbType.CHROMA,
         EMBEDDING_DB_FUNCTION=OllamaEmbeddingFunction(
             url=os.getenv("EMBEDDING_API_URL", "http://ollama:11434/api/embeddings"),
             model_name=os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual"),

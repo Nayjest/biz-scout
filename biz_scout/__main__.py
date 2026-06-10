@@ -8,7 +8,7 @@ from .bootstrap import bootstrap
 
 
 def main() -> None:
-    bootstrap()
+    bootstrap(".env", warmup=False)
     ui = Path(__file__).with_name("ui.py")
     streamlit_bootstrap.run(str(ui), is_hello=False, args=[], flag_options={})
 

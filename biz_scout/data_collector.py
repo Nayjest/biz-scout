@@ -10,6 +10,7 @@ from .company import safe_file_name
 
 PAGES_PER_SUBJECT = int(os.getenv("PAGES_PER_SUBJECT", 2))
 MAX_CONCURRENT_TASKS = int(os.getenv("MAX_CONCURRENT_TASKS", 5))
+MAX_DATA_COLLECTING_QUESTIONS = int(os.getenv("MAX_DATA_COLLECTING_QUESTIONS", 50))
 
 SUBJECTS = {
     "news": "Latest news and developments (recent news, press releases, product launches, executive changes)",
@@ -44,11 +45,19 @@ SUBJECTS = {
 def collect_company_info_perplexity(company_name: str) -> list[tuple[str, str]]:
     logging.info("Collecting information for company: %s", company_name)
     started_at = time.monotonic()
+    subj_keys = list(SUBJECTS)[:MAX_DATA_COLLECTING_QUESTIONS]
+    if len(subj_keys) < len(SUBJECTS):
+        logging.info(
+            "Limiting data collection to %d of %d subjects"
+            " (MAX_DATA_COLLECTING_QUESTIONS)",
+            len(subj_keys),
+            len(SUBJECTS),
+        )
     results = asyncio.run(
         mc.utils.run_parallel(
             [
                 collect_facts_group_perplexity(company_name, subj_key)
-                for subj_key in SUBJECTS.keys()
+                for subj_key in subj_keys
             ],
             max_concurrent_tasks=MAX_CONCURRENT_TASKS,
         )
