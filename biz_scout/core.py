@@ -1,17 +1,27 @@
+import os
 import logging
 import textwrap
 from collections.abc import Iterator
 
 import microcore as mc
 from microcore.ai_func import ai_func, ToolSet
+from microcore.configuration import get_bool_from_env
 
 from .company import normalise_company_name, collection_id
 from .data_collector import collect_company_info_perplexity
 
-CONTEXT_DOCS_LIMIT = 20
+DOCUMENTS_IN_CONTEXT = int(os.getenv("DOCUMENTS_IN_CONTEXT"))
+TOKEN__STREAM_IT_TO_USER = ">>"
 
 def is_indexed(company_name_norm: str) -> bool:
-    return bool(mc.texts.find_one("companies", where={"company_name": company_name_norm}))
+    records = mc.texts.search(
+        "companies",
+        query=company_name_norm,
+        where={"company_name": company_name_norm},
+        n_results=1,
+    )
+    return len(records) > 0
+
 
 def mark_indexed(company_name_norm: str):
     mc.texts.save("companies", company_name_norm, {"company_name": company_name_norm})
@@ -26,7 +36,7 @@ def index(
     company_name = normalise_company_name(company_name)
     yield f"\nCollecting information on company: {company_name}...  \n"
 
-    facts: list[tuple[str,str]] = collect_company_info_perplexity(company_name)
+    facts: list[tuple[str, str]] = collect_company_info_perplexity(company_name)
     yield f"\nCollected {len(facts)} facts.  \n"
 
     yield f"\nIndexing facts...  \n"
@@ -37,10 +47,19 @@ def index(
     mark_indexed(company_name)
     yield "\nDone"
 
+
+def grounding_check(question: str, docs: list[str]) -> bool:
+    """Check if the retrieved documents contain the information needed to answer the question."""
+    check_prompt = mc.tpl(
+        "check_answer_existence.jinja2", question=question, docs=docs
+    ).to_llm()
+    return "Y" in check_prompt
+
+
 @ai_func()
 def answer_question(
     company_name: str,  # Normalised company name using latin characters only, without legal suffixes like "Inc", "Ltd", etc. For example, "microsoft"
-    question: str
+    question: str,
 ) -> Iterator[str]:
     """
     Answer any question about the target company.
@@ -48,21 +67,25 @@ def answer_question(
     company_name = normalise_company_name(company_name)
     logging.info(f"Answering question about: {company_name}... Question: {question}")
     if not is_indexed(company_name):
-        yield textwrap.dedent(
-            f"""
+        yield textwrap.dedent(f"""
             Company \"{company_name}\" not found in the database.
             Do you want me to collect the relevant information in the internet
             and build knowledge base?
-            """
-        )
+            """)
         return
-    docs = mc.texts.search(collection_id(company_name), question, n_results=CONTEXT_DOCS_LIMIT)
-    if "Y" not in mc.tpl("check_answer_existence.jinja2", question=question, docs=docs).to_llm():
+    docs = mc.texts.search(
+        collection_id(company_name), question, n_results=DOCUMENTS_IN_CONTEXT
+    )
+    need_grounding_check = get_bool_from_env("RAG_GROUNDING_CHECK", default=False)
+    if need_grounding_check and grounding_check(question, docs):
         yield textwrap.dedent("""
-        I'm sorry, but I couldn't find the information needed to answer your question in the database.
-        """)
+            I'm sorry, but I couldn't find the information needed to answer your question
+            in the database.  
+            """)
     else:
-        yield from mc.llm_stream(mc.tpl("answer_question.jinja2", question=question, docs=docs))
+        yield from mc.llm_stream(
+            mc.tpl("answer_question.jinja2", question=question, docs=docs)
+        )
 
 
 def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
@@ -71,26 +94,29 @@ def process_user_request(history: list[mc.Msg]) -> Iterator[str]:
     available_companies = mc.texts.search("companies", user_question, n_results=100)
     sys_msg = mc.tpl(
         "front_ai_system_prompt.jinja2",
-        tools = tools,
-        available_companies = available_companies,
+        tools=tools,
+        available_companies=available_companies,
+        TOKEN__STREAM_IT_TO_USER=TOKEN__STREAM_IT_TO_USER,
     ).as_system
     logging.info(f"Received question: {history[-1].content}")
 
     output = ""
+
     def capture_all(chunk):
         nonlocal output
         output += chunk
-    conversation_gen = mc.llm_stream([sys_msg, *history], callback=capture_all)
-    first_chunk = next(conversation_gen)
-    if first_chunk == ">>":
-        yield from conversation_gen
-        logging.info(f"Answer: {output}")
-    else:
-        for chunk in conversation_gen: pass
-        output = output.replace('▁▁"', '"')
-        logging.info(f"LLM Response: {output}")
-        name, args, kwargs = tools.extract_tool_params(output)
-        yield f" -> **{name}**({', '.join(k+':'+v for k,v in kwargs.items())})\n"
-        mcd_gen = tools.call(name, args, kwargs)
-        yield from mcd_gen
 
+    conversation_generator = mc.llm_stream([sys_msg, *history], callback=capture_all)
+    first_chunk = next(conversation_generator)
+    if first_chunk and first_chunk.startswith(TOKEN__STREAM_IT_TO_USER):
+        yield from conversation_generator
+        logging.info(f"Answer: {output}")
+        return
+
+    for _ in conversation_generator:
+        pass
+    logging.info(f"LLM Response: {output}")
+    name, args, kwargs = tools.extract_tool_params(output)
+    yield f" -> **{name}**({', '.join(k+':'+v for k,v in kwargs.items())})  \n"
+    tool_call_generator = tools.call(name, args, kwargs)
+    yield from tool_call_generator

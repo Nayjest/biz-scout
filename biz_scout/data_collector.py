@@ -1,14 +1,15 @@
 import logging
 import asyncio
+import os
 import time
 
 import microcore as mc
 
-from .perplexity_connection import perplexity
+from biz_scout.bootstrap.perplexity_connection import perplexity
 from .company import safe_file_name
 
-PAGES_PER_SUBJECT = 2
-MAX_PARALLEL_WORKERS = 2
+PAGES_PER_SUBJECT = os.getenv("PAGES_PER_SUBJECT", 2)
+MAX_CONCURRENT_TASKS = os.getenv("MAX_CONCURRENT_TASKS", 5)
 
 SUBJECTS = {
     "news": "Latest news and developments (recent news, press releases, product launches, executive changes)",
@@ -34,7 +35,7 @@ SUBJECTS = {
     "strategy": "Strategy and future outlook (stated goals, expansion plans, recent announcements, forecasts)",
     "online": "Digital and online presence (website, social media, traffic, online footprint)",
     "qa": "Frequently asked questions and synthesized answers about the company generated from all collected evidence",
-    "rare":"Facts the company rarely highlights publicly, surprising facts and little-known information",
+    "rare": "Facts the company rarely highlights publicly, surprising facts and little-known information",
     "negative": "Negative news and criticism",
     "perception": "Public perception and internet discussions",
 }
@@ -43,10 +44,15 @@ SUBJECTS = {
 def collect_company_info_perplexity(company_name: str) -> list[tuple[str, str]]:
     logging.info("Collecting information for company: %s", company_name)
     started_at = time.monotonic()
-    results = asyncio.run(mc.utils.run_parallel(
-        [collect_facts_group_perplexity(company_name, subj_key) for subj_key in SUBJECTS.keys()],
-        max_concurrent_tasks=MAX_PARALLEL_WORKERS,
-    ))
+    results = asyncio.run(
+        mc.utils.run_parallel(
+            [
+                collect_facts_group_perplexity(company_name, subj_key)
+                for subj_key in SUBJECTS.keys()
+            ],
+            max_concurrent_tasks=MAX_CONCURRENT_TASKS,
+        )
+    )
     # collect instead facts in one line
     facts: list[tuple[str, str]] = [fact for group in results for fact in group]
     logging.info(
@@ -60,12 +66,10 @@ def collect_company_info_perplexity(company_name: str) -> list[tuple[str, str]]:
 
 async def collect_facts_group_perplexity(
     company_name: str, subj_key: str
-) -> list[tuple[str,str]]:
+) -> list[tuple[str, str]]:
     subject = SUBJECTS[subj_key]
     prompt = mc.tpl(
-        "data_collector_perplexity.jinja2",
-        company_name=company_name,
-        subject=subject
+        "data_collector_perplexity.jinja2", company_name=company_name, subject=subject
     ).as_user
     facts = []
     history = [prompt]
@@ -74,18 +78,18 @@ async def collect_facts_group_perplexity(
             "Collecting facts for subject: %s... Iteration %d\n%s",
             subject,
             i + 1,
-            mc.ui.green(prompt)
+            mc.ui.green(prompt),
         )
         response = await perplexity(history)
         logging.info(
             "Received response for subject %s, iteration %d: %s",
             subject,
             i + 1,
-            mc.ui.cyan(response)
+            mc.ui.cyan(response),
         )
         file = mc.storage.write(
             f"raw_kb/{safe_file_name(company_name)}/{subj_key}_step{i+1}.txt",
-            str(response)
+            str(response),
         )
         logging.info("Saved raw response to %s", file)
         history.append(response.as_assistant)
@@ -94,7 +98,7 @@ async def collect_facts_group_perplexity(
             logging.error(
                 "Perplexity returned an error for subject %s: %s",
                 subject,
-                mc.ui.red(response)
+                mc.ui.red(response),
             )
             break
         for record in response.split("\n---"):

@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 import microcore as mc
 
+
 def setup_logging(log_level: int = logging.INFO):
     """Setup custom CLI logging format with colored output."""
 

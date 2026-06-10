@@ -20,7 +20,7 @@ def wait_for_models():
     logging.info("Waiting for LLM warmup....")
     while True:
         try:
-            res = mc.llm("Answer with \"OK\"")
+            res = mc.llm('Answer with "OK"')
             if "OK" in res.strip().upper():
                 break
             logging.error("Wrong response from LLM, expected 'OK', got: %s", res)

@@ -2,9 +2,9 @@ import sys
 
 import microcore as mc
 
-from biz_scout.backend import index
-from biz_scout.logging import setup_logging
-from biz_scout.perplexity_connection import init_perplexity
+from biz_scout.core import index
+from biz_scout.bootstrap.logging import setup_logging
+from biz_scout.bootstrap.perplexity_connection import init_perplexity
 
 
 setup_logging()

@@ -1,17 +1,35 @@
-# Model selection — single source of truth. Edit these to switch models.
-# Default chat LLM: gemma4:12b (~7.6GB). Was gemma3n:e4b / qwen3.5:0.8b.
-x-llm-model: &llm-model "gemma4:12b"
-x-embedding-model: &embedding-model "paraphrase-multilingual"
-
 services:
+
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    # Inject the full .env (PERPLEXITY_API_KEY, RAG/indexing settings, etc.) into the
+    # container. The explicit `environment:` values below override any overlapping keys.
+    env_file:
+      - .env
+    environment:
+      # These pin the app -> Ollama connection regardless of .env, and must override
+      # the .env LLM_API_* values (which target Perplexity / are container-unaware).
+      LLM_API_TYPE: openai
+      LLM_API_BASE: http://ollama:11434/v1
+      LLM_API_KEY: ollama
+      MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      MAX_CONVERSATION_MESSAGES: ${MAX_CONVERSATION_MESSAGES}
+    depends_on:
+      model-warmup:
+        condition: service_completed_successfully
+    volumes:
+      - ./biz_scout:/app/biz_scout
+      - ./tpl:/app/tpl
+      - ./storage:/app/storage
+    restart: unless-stopped
+
   ollama:
     image: ollama/ollama:latest
     environment:
-      # Quiet the per-request [GIN] HTTP access logs (and the startup warning);
-      # model load/error logs are unaffected.
       - GIN_MODE=release
-      # Keep models resident in memory instead of evicting after idle (default 5m),
-      # and allow the chat LLM + embedding model to stay loaded at the same time.
       - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_MAX_LOADED_MODELS=2
     volumes:
@@ -41,8 +59,8 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: *llm-model
-      EMBEDDING_MODEL: *embedding-model
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
     entrypoint:
       - /bin/sh
       - -c
@@ -52,22 +70,17 @@ services:
         ollama pull "$$EMBEDDING_MODEL"
     restart: "no"
 
-  # Load both models into the Ollama server's memory before the app starts.
-  # /api/generate with no prompt just loads the LLM; /api/embeddings warms the
-  # embedding model. keep_alive:-1 makes them stay resident (also enforced
-  # globally via OLLAMA_KEEP_ALIVE on the ollama service).
   model-warmup:
     image: curlimages/curl:latest
     depends_on:
       model-pull:
         condition: service_completed_successfully
     environment:
-      OLLAMA_MODEL: *llm-model
-      EMBEDDING_MODEL: *embedding-model
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
     entrypoint:
       - /bin/sh
       - -c
-      # $$VAR is escaped so Compose passes a literal $VAR to the container shell.
       - >
         echo "Warming LLM $$OLLAMA_MODEL..." &&
         curl -fsS http://ollama:11434/api/generate
@@ -77,27 +90,3 @@ services:
         -d "{\"model\":\"$$EMBEDDING_MODEL\",\"prompt\":\"warmup\",\"keep_alive\":-1}" &&
         echo "Both models resident."
     restart: "no"
-
-  app:
-    build: .
-    ports:
-      - "8501:8501"
-    environment:
-      LLM_API_TYPE: openai
-      LLM_API_BASE: http://ollama:11434/v1
-      LLM_API_KEY: ollama
-      MODEL: *llm-model
-      EMBEDDING_MODEL: *embedding-model
-    depends_on:
-      model-warmup:
-        condition: service_completed_successfully
-    volumes:
-      - ./biz_scout:/app/biz_scout
-      - ./tpl:/app/tpl  # live-edit Jinja2 prompt templates without a rebuild
-      # Persist the knowledge base (raw_kb facts + Chroma vector DB) to the host.
-      # Without this, mc.storage writes to the container's ephemeral /app/storage.
-      - ./storage:/app/storage
-      # Perplexity API key/config — read at runtime by mc.configure('.env.perplexity').
-      # Git-ignored and excluded from the image, so it must be mounted in.
-      - ./.env.perplexity:/app/.env.perplexity:ro
-    restart: unless-stopped
